@@ -114,7 +114,7 @@ BLYNK_WRITE(V10) {
     terminal.println("");
     terminal.println("Going to sleep...");
     terminal.flush();
-    sleep(SLEEPTIME_SECS);
+    gotosleep(SLEEPTIME_SECS);
   }
   if (String("scd") == param.asStr()) {
     uint16_t error;
