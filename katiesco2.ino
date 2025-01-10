@@ -21,6 +21,8 @@ sensors_event_t humidity, temp;
 int GPIO_reason;
 #include "esp_sleep.h"
 
+
+
 const char* ssid = "mikesnet";
 const char* password = "springchicken";
 // base class GxEPD2_GFX can be used to pass references or pointers to the display instance as parameter, uses ~1.2k more code
@@ -90,7 +92,83 @@ float findLowestNonZero(float a, float b, float c) {
   return minimum;
 }
 
+WidgetTerminal terminal(V10);
+
+
+BLYNK_WRITE(V10) {
+  if (String("recal") == param.asStr()) {
+    uint16_t error;
+    scd4x.stopPeriodicMeasurement();
+    terminal.println("Recalibrating to 400ppm...");
+    scd4x.performForcedRecalibration(400, error);
+    terminal.print("Adjusted by: ");
+    terminal.println(error);
+    terminal.flush();
+    scd4x.startPeriodicMeasurement();
+  }
+  if (String("sleep") == param.asStr()) {
+    terminal.println("");
+    terminal.println("Going to sleep...");
+    terminal.flush();
+    gotosleep();
+  }
+  if (String("scd") == param.asStr()) {
+    uint16_t error;
+    char errorMessage[256];
+    bool isDataReady = false;
+    error = scd4x.getDataReadyFlag(isDataReady);
+    if (error) {
+      terminal.print("Error trying to execute getDataReadyFlag(): ");
+      errorToString(error, errorMessage, 256);
+      terminal.println(errorMessage);
+      terminal.flush();
+      return;
+    }
+    if (isDataReady) {
+      error = scd4x.readMeasurement(co2, temp2, hum);
+      if (error) {
+        terminal.print("Error trying to execute readMeasurement(): ");
+        errorToString(error, errorMessage, 256);
+        terminal.println(errorMessage);
+        terminal.flush();
+      } else if (co2 == 0) {
+        terminal.println("Invalid sample detected, skipping.");
+        terminal.flush();
+      } else {
+        terminal.print("CO2: ");
+        terminal.println(co2);
+
+        terminal.print("Temp: ");
+        terminal.println(temp2);
+
+      }
+    }
+    terminal.flush();
+  }
+  if (param.asInt() > 300) {
+    uint16_t error;
+    int newppm = param.asInt();
+    scd4x.stopPeriodicMeasurement();
+    terminal.println("");
+    terminal.print("Recalibrating to ");
+    terminal.print(newppm);
+    terminal.println("ppm.");
+    
+    scd4x.performForcedRecalibration(newppm, error);
+    terminal.print("Adjusted by: ");
+    terminal.println(32767 - error);
+    terminal.flush();
+    scd4x.startPeriodicMeasurement();
+  }
+  terminal.flush();
+}
+
+
 void gotosleep() {
+      scd4x.stopPeriodicMeasurement();
+      delay(10);
+      scd4x.powerDown();
+      delay(10);
       WiFi.disconnect();
       display.hibernate();
       SPI.end();
@@ -105,6 +183,7 @@ void gotosleep() {
       pinMode(3, INPUT_PULLUP );
       pinMode(0, INPUT_PULLUP );
       pinMode(5, INPUT_PULLUP );
+      digitalWrite(controlpin, LOW);
       pinMode(controlpin, INPUT);
 
       //delay(10000);
@@ -158,13 +237,13 @@ BLYNK_WRITE(V82) {
 void startWifi(){
 
   //display.clearScreen();
-  //display.setPartialWindow(0, 0, display.width(), display.height());
-  //display.setCursor(0, 0);
-  //display.firstPage();
+  display.setPartialWindow(0, 0, display.width(), display.height());
+  display.setCursor(0, 0);
+  display.firstPage();
 
-  //do {
-  //  display.print("Connecting...");
-  //} while (display.nextPage());
+  do {
+    display.print("Connecting...");
+  } while (display.nextPage());
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);  
   WiFi.setTxPower (WIFI_POWER_8_5dBm);
@@ -177,7 +256,7 @@ void startWifi(){
         return;
       }
     //do {
-      //display.print(".");
+      display.print(".");
       // display.display(true);
     //} while (display.nextPage());
   }
@@ -261,6 +340,12 @@ void startWebserver(){
     //} while (display.nextPage());
     delay(1000);
   }
+  Blynk.config(bedroomauth, IPAddress(192, 168, 50, 197), 8080);
+  Blynk.connect();
+  while ((!Blynk.connected()) && (millis() < 20000)){
+     // display.print(".");
+     //  display.display(true);
+       delay(500);}
   wipeScreen();
   display.setCursor(0, 0);
   display.firstPage();
@@ -738,7 +823,10 @@ void setup()
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
   Wire.begin();  
   scd4x.begin(Wire);
+  scd4x.wakeUp();
   scd4x.stopPeriodicMeasurement();
+  uint16_t error;
+  //scd4x.performFactoryReset();
   float toff;
 if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
   {scd4x.setTemperatureOffset(4 - TEMP_OFFSET);}
@@ -755,7 +843,10 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
   aht.getEvent(&humidity, &temp);
    t = temp.temperature;
    h = humidity.relative_humidity;
-   pres = bmp.readPressure() / 100.0;
+    pres = bmp.readPressure() / 100.0;
+   uint16_t pres1 = pres;
+   scd4x.setAmbientPressure(pres1);
+   
     abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
 
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -839,7 +930,12 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
       display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
       display.firstPage();
+    uint16_t error;
+    scd4x.stopPeriodicMeasurement();
+    scd4x.performFactoryReset();
+    //scd4x.performForcedRecalibration(980, error);
 
+    scd4x.startPeriodicMeasurement();
       do {
         display.print("Connecting...");
       } while (display.nextPage());
@@ -871,9 +967,10 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
 
 void loop()
 {
+  Blynk.run();
 ArduinoOTA.handle();
 if (!digitalRead(5)) {gotosleep();}
-delay(250);
+//delay(250);
     // Add a delay to sample data at intervals (e.g., every minute)
     //delay(1000); // 1 minute delay, adjust as needed
 }
