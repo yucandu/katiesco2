@@ -198,6 +198,11 @@ void startWifi(){
      // display.print(".");
      //  display.display(true);
        delay(500);}
+          bool isDataReady = false;
+          scd4x.getDataReadyFlag(isDataReady);
+          while(!isDataReady){delay(250);
+          scd4x.getDataReadyFlag(isDataReady);}
+          scd4x.readMeasurement(co2, temp2, hum);
   if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
             Blynk.virtualWrite(V91, t);
           if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
@@ -589,11 +594,7 @@ void takeSamples(){
           Blynk.syncVirtual(V78);
           Blynk.syncVirtual(V79);
           Blynk.syncVirtual(V82);
-          bool isDataReady = false;
-          scd4x.getDataReadyFlag(isDataReady);
-          while(!isDataReady){delay(250);
-          scd4x.getDataReadyFlag(isDataReady);}
-          scd4x.readMeasurement(co2, temp2, hum);
+
           float min_value = findLowestNonZero(v41_value, v42_value, v62_value);
 
 
