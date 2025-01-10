@@ -92,10 +92,10 @@ float findLowestNonZero(float a, float b, float c) {
   return minimum;
 }
 
-WidgetTerminal terminal(V10);
+WidgetTerminal terminal(V20);
 
 
-BLYNK_WRITE(V10) {
+BLYNK_WRITE(V20) {
   if (String("recal") == param.asStr()) {
     uint16_t error;
     scd4x.stopPeriodicMeasurement();
@@ -160,6 +160,13 @@ BLYNK_WRITE(V10) {
     terminal.flush();
     scd4x.startPeriodicMeasurement();
   }
+    if (String("facreset") == param.asStr()) {
+    scd4x.stopPeriodicMeasurement();
+    scd4x.performFactoryReset();
+    //scd4x.performForcedRecalibration(980, error);
+
+    scd4x.startPeriodicMeasurement();
+    }
   terminal.flush();
 }
 
@@ -930,12 +937,7 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
       display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
       display.firstPage();
-    uint16_t error;
-    scd4x.stopPeriodicMeasurement();
-    scd4x.performFactoryReset();
-    //scd4x.performForcedRecalibration(980, error);
 
-    scd4x.startPeriodicMeasurement();
       do {
         display.print("Connecting...");
       } while (display.nextPage());
