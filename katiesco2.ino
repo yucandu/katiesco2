@@ -347,13 +347,14 @@ void startWebserver(){
 
 void displayMenu(){
   display.setPartialWindow(0, 0, display.width(), display.height());
+  display.fillScreen(GxEPD_WHITE);
   display.setCursor(0, 0);
-    if (menusel == 1) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
+    if (menusel == 1) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.print("Connected! to: ");
     display.println(WiFi.localIP());
-    if (menusel == 2) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
+    if (menusel == 2) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("ArduinoOTA started");
-    if (menusel == 3) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
+    if (menusel == 3) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.print("RSSI: ");
     display.println(WiFi.RSSI());
    display.display(true);
@@ -926,8 +927,10 @@ void loop()
   ArduinoOTA.handle();
   if (!digitalRead(5)) {gotosleep();}
   every (100){
-    if (!digitalRead(1)) {menusel++;
-    displayMenu();
+    if (!digitalRead(1)) {
+      menusel++;
+      if (menusel > 3) {menusel = 1;}
+      displayMenu();
     }
     if (!digitalRead(2)) {menusel--;
     displayMenu();
