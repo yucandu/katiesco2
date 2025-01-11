@@ -51,6 +51,7 @@ float abshum;
  float maxVal = 4.2;
 RTC_DATA_ATTR int readingCount = 0; // Counter for the number of readings
 int readingTime;
+int menusel;
 uint16_t co2;
 float temp2, hum;
 
@@ -63,6 +64,11 @@ float temp2, hum;
 #include <Fonts/DejaVu_Serif_Condensed_60.h>
 #define BUTTON_PIN_BITMASK(GPIO) (1ULL << GPIO)
 GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=5*/ SS, /*DC=*/ 21, /*RES=*/ 20, /*BUSY=*/ 3)); // DEPG0213BN 122x250, SSD1680
+
+#define every(interval) \
+    static uint32_t __every__##interval = millis(); \
+    if (millis() - __every__##interval >= interval && (__every__##interval = millis()))
+
 
 const char* blynkserver = "192.168.50.197:9443";
 const char* bedroomauth = "8_-CN2rm4ki9P3i_NkPhxIbCiKd5RXhK";  //hubert
@@ -91,6 +97,8 @@ float findLowestNonZero(float a, float b, float c) {
 
   return minimum;
 }
+
+
 
 WidgetTerminal terminal(V20);
 
@@ -171,6 +179,8 @@ BLYNK_WRITE(V20) {
 }
 
 
+
+
 void gotosleep() {
       scd4x.stopPeriodicMeasurement();
       delay(10);
@@ -193,17 +203,9 @@ void gotosleep() {
       digitalWrite(controlpin, LOW);
       pinMode(controlpin, INPUT);
 
-      //delay(10000);
-      //rtc_gpio_isolate(gpio_num_t(SDA));
-      //rtc_gpio_isolate(gpio_num_t(SCL));
-      //periph_module_disable(PERIPH_I2C0_MODULE);  
-      //digitalWrite(SDA, 0);
-      //digitalWrite(SCL, 0);
+
       uint64_t bitmask = BUTTON_PIN_BITMASK(GPIO_NUM_1) | BUTTON_PIN_BITMASK(GPIO_NUM_2) | BUTTON_PIN_BITMASK(GPIO_NUM_3) | BUTTON_PIN_BITMASK(GPIO_NUM_4) | BUTTON_PIN_BITMASK(GPIO_NUM_5);
-   //   esp_deep_sleep_enable_gpio_wakeup(1 << 0, ESP_GPIO_WAKEUP_GPIO_LOW);
-    //  esp_deep_sleep_enable_gpio_wakeup(1 << 1, ESP_GPIO_WAKEUP_GPIO_LOW);
-   //   esp_deep_sleep_enable_gpio_wakeup(1 << 2, ESP_GPIO_WAKEUP_GPIO_LOW);
-   //   esp_deep_sleep_enable_gpio_wakeup(1 << 3, ESP_GPIO_WAKEUP_GPIO_LOW);
+
       esp_deep_sleep_enable_gpio_wakeup(bitmask, ESP_GPIO_WAKEUP_GPIO_LOW);
       esp_sleep_enable_timer_wakeup(sleeptimeSecs * 1000000ULL);
       delay(1);
@@ -212,34 +214,7 @@ void gotosleep() {
       delay(1000);
 }
 
-BLYNK_CONNECTED() {
-  Blynk.syncVirtual(V41);
-  Blynk.syncVirtual(V42);
-  Blynk.syncVirtual(V62);
-  Blynk.syncVirtual(V78);
-  Blynk.syncVirtual(V79);
-  Blynk.syncVirtual(V82);
-}
 
-BLYNK_WRITE(V41) {
-  v41_value = param.asFloat();
-}
-
-BLYNK_WRITE(V42) {
-  v42_value = param.asFloat();
-}
-BLYNK_WRITE(V62) {
-  v62_value = param.asFloat();
-}
-BLYNK_WRITE(V78) {
-  windspeed = param.asFloat();
-}
-BLYNK_WRITE(V79) {
-  windgust = param.asFloat();
-}
-BLYNK_WRITE(V82) {
-  fridgetemp = param.asFloat();
-}
 
 void startWifi(){
 
@@ -362,7 +337,23 @@ void startWebserver(){
   } while (display.nextPage());
   ArduinoOTA.setHostname("epaperdisplay");
   ArduinoOTA.begin();
+    display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
   display.println("ArduinoOTA started");
+    display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
+    display.print("RSSI: ");
+    display.println(WiFi.RSSI());
+   display.display(true);
+}
+
+void displayMenu(){
+  display.setPartialWindow(0, 0, display.width(), display.height());
+  display.setCursor(0, 0);
+    if (menusel == 1) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
+    display.print("Connected! to: ");
+    display.println(WiFi.localIP());
+    if (menusel == 2) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
+    display.println("ArduinoOTA started");
+    if (menusel == 3) {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);} else {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);}
     display.print("RSSI: ");
     display.println(WiFi.RSSI());
    display.display(true);
@@ -398,11 +389,11 @@ void setupChart(){
         display.print("<");
         display.print(minVal, 3);
         display.setCursor(110, 114);
-        display.print("<#");
+        display.print("<--");
         display.print(readingCount - 1, 0);
         display.print("*");
         display.print(sleeptimeSecs, 0);
-        display.print("s>");
+        display.print("s-->");
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -419,11 +410,11 @@ void setupChart2(){
         display.print("<");
         display.print(minVal, 0);
         display.setCursor(110, 114);
-        display.print("<#");
+        display.print("<--");
         display.print(readingCount - 1, 0);
         display.print("*");
         display.print(sleeptimeSecs, 0);
-        display.print("s>");
+        display.print("s-->");
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -431,12 +422,11 @@ void setupChart2(){
         display.setCursor(125, 0);
 }
 
-double mapf(float x, float in_min, float in_max, float out_min, float out_max)
-{
+double mapf(float x, float in_min, float in_max, float out_min, float out_max){
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void doTempDisplay() {
+void doTempChart() {
     // Recalculate min and max values
      minVal = array1[maxArray - readingCount];
      maxVal = array1[maxArray - readingCount];
@@ -484,7 +474,7 @@ void doTempDisplay() {
     gotosleep();
 }
 
-void doHumDisplay() {
+void doCO2Chart() {
     // Recalculate min and max values
      minVal = array2[maxArray - readingCount];
      maxVal = array2[maxArray - readingCount];
@@ -529,7 +519,7 @@ void doHumDisplay() {
     gotosleep();
 }
 
-void doWindDisplay() {
+void doMainDisplay() {
 
 
 
@@ -586,7 +576,7 @@ void doPresDisplay() {
     gotosleep();
 }
 
-void doBatDisplay() {
+void doBatChart() {
     // Recalculate min and max values
      minVal = array4[maxArray - readingCount];
      maxVal = array4[maxArray - readingCount];
@@ -679,29 +669,10 @@ float fetchBlynkValue(const char* vpin, const char* authToken) {
 }
 
 void takeSamples(){
-
-     if (WiFi.status() == WL_CONNECTED) {
-          Blynk.syncVirtual(V41);
-          Blynk.syncVirtual(V62);
-          Blynk.syncVirtual(V78);
-          Blynk.syncVirtual(V79);
-          Blynk.syncVirtual(V82);
-
-          float min_value = findLowestNonZero(v41_value, v42_value, v62_value);
-
-
-
-
-
-          //display.display(true);
-
-          if (min_value != 999) {
-            for (int i = 0; i < (maxArray - 1); i++) {
-                array3[i] = array3[i + 1];
-            }
-            array3[(maxArray - 1)] = min_value;
-          }
+        for (int i = 0; i < (maxArray - 1); i++) {
+            array3[i] = array3[i + 1];
         }
+        array3[(maxArray - 1)] = pres;
 
         if (readingCount < maxArray) {
             readingCount++;
@@ -717,8 +688,6 @@ void takeSamples(){
         }
         array2[(maxArray - 1)] = co2;
 
-
-
         for (int i = 0; i < (maxArray - 1); i++) {
             array4[i] = array4[i + 1];
         }
@@ -726,11 +695,7 @@ void takeSamples(){
 }
 
 void updateMain(){
-        //display.drawLine(122, 0, 122, 122, GxEPD_BLACK);
-        //display.drawLine(123, 0, 123, 122, GxEPD_BLACK);
-        //display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
-        //display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
-          time_t now = time(NULL);
+  time_t now = time(NULL);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
@@ -745,66 +710,56 @@ void updateMain(){
   }
     display.setFullWindow();
     display.fillScreen(GxEPD_WHITE);
-        //display.setPartialWindow(0, 0, display.width()/2, display.height()/2);
-        //display.fillRect(0,0,display.width()/2,display.height()/2,GxEPD_WHITE);
+        float co2todraw = array2[(maxArray - 1)];
+        float temptodraw = array1[(maxArray - 1)];
+        
         display.drawLine(122, 0, 122, 122, GxEPD_BLACK);
         display.drawLine(123, 0, 123, 122, GxEPD_BLACK);
         display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
         display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
-        //display.displayWindow(0, 0, display.width()/2, display.height()/2);
+
         display.setTextSize(2);
         display.setCursor(32,2);
-        display.print("Temp:");
-        display.setCursor(158,2);
-        display.print("Wind:");
-        display.setCursor(24,64);
-        display.print("Fridge:");
-        display.setCursor(158,64);
         display.print("CO2:");
+        display.setCursor(158,2);
+        display.print("Temp:");
+        display.setCursor(8,64);
+        display.print("Humidity:");
+        display.setCursor(136,64);
+        display.print("Pressure:");
+
         display.setTextSize(3);
-        display.setCursor(5,32);
-        float temptodraw = array3[(maxArray - 1)];
-        if ((temptodraw > 0) && (temptodraw < 10)) {display.print(" ");}
-        display.print(temptodraw, 1);
-        display.print("c");
-
-        
-        //display.fillRect(display.width()/2,0,display.width()/2,display.height()/2,GxEPD_WHITE);
-        //display.fillScreen(GxEPD_WHITE);
-        float co2todraw = array2[(maxArray - 1)];
-        display.setCursor(140,32);
-        display.print(windspeed, 0);
-        display.print("kph");
-        /*display.drawLine(122, 0, 122, 122, GxEPD_BLACK);
-        display.drawLine(123, 0, 123, 122, GxEPD_BLACK);
-        display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
-        display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
-        display.displayWindow(display.width()/2, 0, display.width()/2, display.height()/2);*/
-
-        
-        //display.fillRect(0,display.height()/2,display.width()/2,display.height()/2,GxEPD_WHITE);
-        //display.fillScreen(GxEPD_WHITE);
-        display.setCursor(20,87);
-        display.print(fridgetemp, 1);
-        display.print("c");
-        display.setTextSize(1);
-        display.setCursor(0, 114-2);
-        display.print(timeString);
-        /*display.drawLine(122, 0, 122, 122, GxEPD_BLACK);
-        display.drawLine(123, 0, 123, 122, GxEPD_BLACK);
-        display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
-        display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
-        display.displayWindow(0, display.height()/2, display.width()/2, display.height()/2);*/
-
-        
-        
-        display.setTextSize(3);
-        //display.fillRect(display.width()/2,display.height()/2,display.width()/2,display.height()/2,GxEPD_WHITE);
-        //display.fillScreen(GxEPD_WHITE);
-        display.setCursor(140,87);
+        display.setCursor(5,26);
+        if ((co2todraw > 0) && (co2todraw < 1000)) {display.print(" ");}
         display.print(co2todraw, 0);
         display.setTextSize(2);
         display.print("ppm");
+
+
+        
+        display.setTextSize(3);
+        display.setCursor(148,26);
+
+        display.print(temptodraw, 1);
+        display.setTextSize(2);
+        display.print("c");
+
+
+        display.setTextSize(3);
+        display.setCursor(20,87);
+        display.print(h, 1);
+        display.setTextSize(2);
+        display.print("%");
+        display.setTextSize(1);
+        display.setCursor(0, 114-2);
+        display.print(timeString);
+
+        display.setTextSize(3);
+
+        display.setCursor(148,87);
+        display.print(pres, 0);
+        display.setTextSize(2);
+        display.print("hPa");
         display.setTextSize(3);
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
@@ -813,13 +768,7 @@ void updateMain(){
         display.drawLine(248,115-2,248,119-2,GxEPD_BLACK);
         display.drawLine(249,115-2,249,119-2,GxEPD_BLACK);
 
-        /*display.drawLine(122, 0, 122, 122, GxEPD_BLACK);
-        display.drawLine(123, 0, 123, 122, GxEPD_BLACK);
-        display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
-        display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
-        display.displayWindow(display.width()/2, display.height()/2, display.width()/2, display.height()/2);*/
         display.display(true);
-
 }
 
 void setup()
@@ -835,8 +784,8 @@ void setup()
   uint16_t error;
   //scd4x.performFactoryReset();
   float toff;
-if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
-  {scd4x.setTemperatureOffset(4 - TEMP_OFFSET);}
+  if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
+    {scd4x.setTemperatureOffset(4 - TEMP_OFFSET);}
   scd4x.startPeriodicMeasurement();
   aht.begin();
   bmp.begin();
@@ -863,6 +812,10 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
   display.setRotation(3);
   display.setTextSize(1);
+  pinMode(1, INPUT_PULLUP );
+  pinMode(2, INPUT_PULLUP );
+  //pinMode(3, INPUT_PULLUP );
+  //pinMode(4, INPUT_PULLUP );
   pinMode(5, INPUT_PULLUP );
 
 
@@ -891,39 +844,39 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
     takeSamples();
       switch (page){
         case 0: 
-          doTempDisplay();
+          doTempChart();
           break;
-        case 1: 
-          doTempDisplay();
+        case 1: //away
+          doTempChart();  
           break;
-        case 2: 
-          doWindDisplay();
+        case 2: //towards
+          doMainDisplay(); 
           break;
-        case 3: 
-          doHumDisplay();
+        case 3:  //down
+          doCO2Chart(); 
           break;
-        case 4: 
-          doBatDisplay();
+        case 4: //up
+          doBatChart(); 
           break;
       }
     }
   switch (GPIO_reason) {
     case 1: 
       page = 1;
-      doTempDisplay();
+      doTempChart();
       break;
     case 2: 
       page = 2;
         wipeScreen();
-        doWindDisplay();
+        doMainDisplay();
       break;
     case 3: 
       page = 3;
-      doHumDisplay();
+      doCO2Chart();
       break;
     case 4: 
       page = 4;
-      doBatDisplay();
+      doBatChart();
       break;
     case 5: 
     delay(50);
@@ -946,19 +899,19 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
       display.clearScreen();
       switch (page){
         case 0: 
-          doTempDisplay();
+          doTempChart();
           break;
         case 1: 
-          doTempDisplay();
+          doTempChart();
           break;
         case 2: 
-          doWindDisplay();
+          doMainDisplay();
           break;
         case 3: 
-          doHumDisplay();
+          doCO2Chart();
           break;
         case 4: 
-          doBatDisplay();
+          doBatChart();
           break;
       }
   }
@@ -970,9 +923,14 @@ if (scd4x.getTemperatureOffset(toff) != (4 - TEMP_OFFSET))
 void loop()
 {
   Blynk.run();
-ArduinoOTA.handle();
-if (!digitalRead(5)) {gotosleep();}
-//delay(250);
-    // Add a delay to sample data at intervals (e.g., every minute)
-    //delay(1000); // 1 minute delay, adjust as needed
+  ArduinoOTA.handle();
+  if (!digitalRead(5)) {gotosleep();}
+  every (100){
+    if (!digitalRead(1)) {menusel++;
+    displayMenu();
+    }
+    if (!digitalRead(2)) {menusel--;
+    displayMenu();
+    }
+  }
 }
