@@ -3,10 +3,13 @@
 #include <Adafruit_BMP280.h>
 #include <WiFi.h>
 //#include <AsyncTCP.h>
-//#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 //#include <AsyncElegantOTA.h>
+  #include <WiFiClient.h>
+
 #include <ArduinoOTA.h>
 #include <HTTPClient.h>
+
 #include <WiFiClientSecure.h>
 #include <BlynkSimpleEsp32.h>
 #include <SensirionI2CScd4x.h>
@@ -20,8 +23,10 @@ sensors_event_t humidity, temp;
 #include "driver/periph_ctrl.h"
 int GPIO_reason;
 #include "esp_sleep.h"
-
-
+#include <ElegantOTA.h>
+#include <WiFiManager.h>      
+WiFiManager wifiManager;
+ WebServer server2(8080);
 
 const char* ssid = "mikesnet";
 const char* password = "springchicken";
@@ -32,7 +37,7 @@ const char* password = "springchicken";
 #define sleeptimeSecs 300
 #define maxArray 501
 #define controlpin 10
-
+#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
 RTC_DATA_ATTR float array1[maxArray];
 RTC_DATA_ATTR float array2[maxArray];
 RTC_DATA_ATTR float array3[maxArray];
@@ -80,23 +85,7 @@ const char* v62_pin = "V62";
 
 float vBat;
 
-float findLowestNonZero(float a, float b, float c) {
-  // Initialize minimum to a very large value
-  float minimum = 999;
 
-  // Check each variable and update the minimum value
-  if (a != 0.0 && a < minimum) {
-    minimum = a;
-  }
-  if (b != 0.0 && b < minimum) {
-    minimum = b;
-  }
-  if (c != 0.0 && c < minimum) {
-    minimum = c;
-  }
-
-  return minimum;
-}
 
 
 
@@ -204,7 +193,7 @@ void gotosleep() {
       pinMode(controlpin, INPUT);
 
 
-      uint64_t bitmask = BUTTON_PIN_BITMASK(GPIO_NUM_1) | BUTTON_PIN_BITMASK(GPIO_NUM_2) | BUTTON_PIN_BITMASK(GPIO_NUM_3) | BUTTON_PIN_BITMASK(GPIO_NUM_4) | BUTTON_PIN_BITMASK(GPIO_NUM_5);
+      uint64_t bitmask = BUTTON_PIN_BITMASK(GPIO_NUM_0) | BUTTON_PIN_BITMASK(GPIO_NUM_1) | BUTTON_PIN_BITMASK(GPIO_NUM_2) | BUTTON_PIN_BITMASK(GPIO_NUM_3) |  BUTTON_PIN_BITMASK(GPIO_NUM_5);
 
       esp_deep_sleep_enable_gpio_wakeup(bitmask, ESP_GPIO_WAKEUP_GPIO_LOW);
       esp_sleep_enable_timer_wakeup(sleeptimeSecs * 1000000ULL);
@@ -217,86 +206,64 @@ void gotosleep() {
 
 
 void startWifi(){
+  WiFiManager wm;
+  if (wm.getWiFiIsSaved()){
+      //display.clearScreen();
+      display.setPartialWindow(0, 0, display.width(), display.height());
+      display.setCursor(0, 0);
+      display.firstPage();
 
-  //display.clearScreen();
-  display.setPartialWindow(0, 0, display.width(), display.height());
-  display.setCursor(0, 0);
-  display.firstPage();
-
-  do {
-    display.print("Connecting...");
-  } while (display.nextPage());
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);  
-  WiFi.setTxPower (WIFI_POWER_8_5dBm);
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    if (millis() > 10000) { //display.print("!");
-      WiFi.setTxPower(WIFI_POWER_8_5dBm);
-    }
-    if (millis() > 20000) {
-        return;
+      do {
+        display.print("Connecting...");
+      } while (display.nextPage());
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
+      WiFi.setTxPower (WIFI_POWER_8_5dBm);
+      // Wait for connection
+      while (WiFi.status() != WL_CONNECTED) {
+        if (millis() > 10000) { 
+          WiFi.setTxPower(WIFI_POWER_8_5dBm);
+        }
+        if (millis() > 20000) {
+            return;
+          }
+          display.print(".");
       }
-    //do {
-      display.print(".");
-      // display.display(true);
-    //} while (display.nextPage());
-  }
-  //wipeScreen();
-  //display.setCursor(0, 0);
-  //display.firstPage();
-  //do {
-    //display.print("Connected! to: ");
-    //display.println(WiFi.localIP());
-  //} while (display.nextPage());
-   // display.print("RSSI: ");
-  //  display.println(WiFi.RSSI());
-  // display.display(true);
-  // display.print("Connecting to blynk...");
-  Blynk.config(bedroomauth, IPAddress(192, 168, 50, 197), 8080);
-  Blynk.connect();
-  while ((!Blynk.connected()) && (millis() < 20000)){
-     // display.print(".");
-     //  display.display(true);
-       delay(500);}
-          bool isDataReady = false;
-          scd4x.getDataReadyFlag(isDataReady);
-          while(!isDataReady){delay(250);
-          scd4x.getDataReadyFlag(isDataReady);}
-          scd4x.readMeasurement(co2, temp2, hum);
-  if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-            Blynk.virtualWrite(V91, t);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V92, h);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V93, pres);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V94, abshum);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V95, vBat);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V96, co2);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V97, temp2);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-          Blynk.virtualWrite(V97, temp2);
-          if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
-    struct tm timeinfo;
-    getLocalTime(&timeinfo);
-    time_t now = time(NULL);
-  localtime_r(&now, &timeinfo);
+      Blynk.config(bedroomauth, IPAddress(216,110,224,105), 8080);
+      Blynk.connect();
+      while ((!Blynk.connected()) && (millis() < 20000)){
+          delay(500);}
 
-  // Allocate a char array for the time string
-  char timeString[10]; // "12:34 PM" is 8 chars + null terminator
+      if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+                Blynk.virtualWrite(V91, t);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V92, h);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V93, pres);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V94, abshum);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V95, vBat);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V96, co2);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V97, temp2);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+              Blynk.virtualWrite(V97, temp2);
+              if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+        struct tm timeinfo;
+        getLocalTime(&timeinfo);
+        time_t now = time(NULL);
+      localtime_r(&now, &timeinfo);
 
-  // Format the time string
- /* if (timeinfo.tm_min < 10) {
-    snprintf(timeString, sizeof(timeString), "%d:0%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
-  } else {
-    snprintf(timeString, sizeof(timeString), "%d:%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
+      // Allocate a char array for the time string
+      char timeString[10]; // "12:34 PM" is 8 chars + null terminator
   }
-    display.println(timeString);
-    display.display(true);*/
+  bool isDataReady = false;
+  scd4x.getDataReadyFlag(isDataReady);
+  while(!isDataReady){delay(250);
+  scd4x.getDataReadyFlag(isDataReady);}
+  scd4x.readMeasurement(co2, temp2, hum);
 }
 
 void startWebserver(){
@@ -337,26 +304,34 @@ void startWebserver(){
   } while (display.nextPage());
   ArduinoOTA.setHostname("epaperdisplay");
   ArduinoOTA.begin();
-    display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
-  display.println("ArduinoOTA started");
-    display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
-    display.print("RSSI: ");
-    display.println(WiFi.RSSI());
-   display.display(true);
+
+  server2.on("/", []() {
+    server2.send(200, "text/plain", "Hi! This is ElegantOTA Demo.");
+  });
+
+  ElegantOTA.begin(&server2);    // Start ElegantOTA
+ 
+  server2.begin();
+  
+  displayMenu();
 }
 
 void displayMenu(){
   display.setPartialWindow(0, 0, display.width(), display.height());
   display.fillScreen(GxEPD_WHITE);
   display.setCursor(0, 0);
+  display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
+  display.print("Connected! to: ");
+  display.println(WiFi.localIP());
+  display.print("RSSI: ");
+  display.println(WiFi.RSSI());
+  display.println("");
     if (menusel == 1) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
-    display.print("Connected! to: ");
-    display.println(WiFi.localIP());
+    display.println("Start WifiManager");
     if (menusel == 2) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
-    display.println("ArduinoOTA started");
+    display.println("Change Sleeptime");
     if (menusel == 3) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
-    display.print("RSSI: ");
-    display.println(WiFi.RSSI());
+    display.println("Exit");
    display.display(true);
 }
 
@@ -520,14 +495,8 @@ void doCO2Chart() {
     gotosleep();
 }
 
-void doMainDisplay() {
-
-
-
-
-        
-wipeScreen();
-
+void doMainDisplay() {        
+  wipeScreen();
   updateMain();
   gotosleep();
 }
@@ -637,37 +606,6 @@ void doBatChart() {
     gotosleep();
 }
 
-float fetchBlynkValue(const char* vpin, const char* authToken) {
-  WiFiClientSecure client;
-  //client.setCACert(root_ca); // Set the certificate
-  client.setInsecure(); 
-  
-  HTTPClient https;
-  https.setReuse(true);
-  String url = String("https://") + blynkserver + "/" + authToken + "/get/" + vpin;
-
-
-  if (https.begin(client, url)) { // HTTPS connection
-    int httpCode = https.GET();
-    float value = NAN;
-
-    if (httpCode == HTTP_CODE_OK) {
-      String payload = https.getString();
-      payload.replace("[", ""); // Remove brackets from the JSON
-      payload.replace("]", "");
-      payload.replace("\"", ""); // Remove brackets from the JSON
-      payload.replace("\"", "");
-      value = payload.toFloat();  
-      if (isnan(value)) {return NAN;}
-
-    } 
-    https.end();
-    return value;
-  } else {
-    gotosleep();
-    return NAN;
-  }
-}
 
 void takeSamples(){
         for (int i = 0; i < (maxArray - 1); i++) {
@@ -772,8 +710,7 @@ void updateMain(){
         display.display(true);
 }
 
-void setup()
-{
+void setup(){
   vBat = analogReadMilliVolts(0) / 500.0;
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
@@ -813,6 +750,7 @@ void setup()
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
   display.setRotation(3);
   display.setTextSize(1);
+  pinMode(0, INPUT_PULLUP );
   pinMode(1, INPUT_PULLUP );
   pinMode(2, INPUT_PULLUP );
   //pinMode(3, INPUT_PULLUP );
@@ -847,13 +785,13 @@ void setup()
         case 0: 
           doTempChart();
           break;
-        case 1: //away
+        case 1: //down
           doTempChart();  
           break;
         case 2: //towards
           doMainDisplay(); 
           break;
-        case 3:  //down
+        case 3:  //away
           doCO2Chart(); 
           break;
         case 4: //up
@@ -875,7 +813,7 @@ void setup()
       page = 3;
       doCO2Chart();
       break;
-    case 4: 
+    case 0: 
       page = 4;
       doBatChart();
       break;
@@ -923,16 +861,34 @@ void setup()
 
 void loop()
 {
+  server2.handleClient();
+  ElegantOTA.loop();
   Blynk.run();
   ArduinoOTA.handle();
-  if (!digitalRead(5)) {gotosleep();}
+  if (!digitalRead(5)) {
+    switch (menusel) {
+      case 1:
+      { 
+            WiFiManager wm;
+            wm.setConfigPortalTimeout(300);
+            wm.startConfigPortal("CO2 Wifi Setup");
+              break; 
+      }
+      case 2: 
+      break; 
+      case 3: 
+      ESP.restart();
+              break; 
+    }
+    gotosleep();
+    }
   every (100){
     if (!digitalRead(1)) {
       menusel++;
       if (menusel > 3) {menusel = 1;}
       displayMenu();
     }
-    if (!digitalRead(2)) {menusel--;
+    if (!digitalRead(0)) {menusel--;
     displayMenu();
     }
   }
