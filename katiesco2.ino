@@ -49,7 +49,7 @@ RTC_DATA_ATTR float array2[maxArray];
 RTC_DATA_ATTR float array3[maxArray];
 RTC_DATA_ATTR float array4[maxArray];
 RTC_DATA_ATTR float windspeed, windgust, fridgetemp, outtemp;
- int  timetosleep;
+ int  timetosleep = 5;
 RTC_DATA_ATTR int  failcount = 0;
 
 const char* ntpServer = "pool.ntp.org";
@@ -301,17 +301,16 @@ void startWifi(){
 void startWebserver(){
 
   
+
+  if (wm.getWiFiIsSaved()){
   display.setPartialWindow(0, 0, display.width(), display.height());
   wipeScreen();
   display.setCursor(0, 0);
-  display.firstPage();
 
   
   display.print("Connecting...");
   display.display(true);
   WiFi.mode(WIFI_STA);
-  if (wm.getWiFiIsSaved()){
-
       
       WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
 
@@ -355,11 +354,11 @@ void startWebserver(){
   t = temp.temperature;
   h = humidity.relative_humidity;
   pres = bmp.readPressure() / 100.0;
-  abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
+  /*abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
   bool isDataReady = false;
   scd4x.getDataReadyFlag(isDataReady);
   if (isDataReady) {
-  scd4x.readMeasurement(co2, temp2, hum);}
+  scd4x.readMeasurement(co2, temp2, hum);}*/
   displayMenu();
 }
 
@@ -376,7 +375,7 @@ void displayMenu(){
   display.println(WiFi.RSSI());
   display.println("");
    }
-   else {display.setCursor(0, 8*4);}
+   else {display.setCursor(0, 8*3);}
     if (menusel == 1) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("Start WifiManager");
     if (menusel == 2) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
@@ -445,7 +444,7 @@ void wipeScreen(){
     } while (display.nextPage());
     display.firstPage();
 
-    //readingTime = ((readingCount - 1) * sleeptimeSecs) / 60;
+
 
 }
 
@@ -461,7 +460,7 @@ void setupChart(){
         display.print("<--");
         display.print(readingCount - 1, 0);
         display.print("*");
-        display.print(sleeptimeSecs, 0);
+        display.print(timetosleep * 60, 0);
         display.print("s-->");
         vBat = analogReadMilliVolts(0) / 500.0;
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
@@ -484,7 +483,7 @@ void setupChart2(){
         display.print("<--");
         display.print(readingCount - 1, 0);
         display.print("*");
-        display.print(sleeptimeSecs, 0);
+        display.print(timetosleep * 60, 0);
         display.print("s-->");
         vBat = analogReadMilliVolts(0) / 500.0;
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
@@ -687,7 +686,7 @@ void doBatChart() {
         display.print("<#");
         display.print(readingCount - 1, 0);
         display.print("*");
-        display.print(sleeptimeSecs, 0);
+        display.print(timetosleep * 60, 0);
         display.print("s>");
         display.setCursor(175, 114);
         vBat = analogReadMilliVolts(0) / 500.0;
@@ -961,9 +960,21 @@ void loop()
       switch (menusel) {
         case 1:
           { 
+                display.setPartialWindow(0, 0, display.width(), display.height());
+                wipeScreen();
+                display.setCursor(0, 0);                                  //
+                display.println("Use your mobile phone to connect to ");
+                display.println("[CO2 WiFi Setup] then browse to");
+                display.println("http://192.168.4.1 to connect to WiFi");
+                display.display(true);
                 failcount = 0;
+                WiFi.mode(WIFI_STA);
                 wm.setConfigPortalTimeout(300);
-                wm.startConfigPortal("CO2 Wifi Setup");
+                if (wm.getWiFiIsSaved()) {
+                wm.startConfigPortal("CO2 WiFi Setup");
+                }
+                else {wm.autoConnect("CO2 WiFi Setup");}
+                displayMenu();
                 break; 
           }
         case 2: 
@@ -1052,4 +1063,6 @@ void loop()
     }
     displayMenu();
   }
+
+  if (millis() > 30*60*1000) {ESP.restart();} //30 minute timeout
 }
