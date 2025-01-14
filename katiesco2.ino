@@ -227,12 +227,9 @@ void startWifi(){
       //display.clearScreen();
       display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
-      display.firstPage();
 
-      do {
         display.print("Connecting to: " + (String)wm.getWiFiSSID());
-      } while (display.nextPage());
-      
+      display.display(true);
       WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
       WiFi.setTxPower (WIFI_POWER_8_5dBm);
       // Wait for connection
@@ -350,6 +347,19 @@ void startWebserver(){
     server2.begin();
    }
   }
+  pinMode(0, INPUT);
+  vBat = analogReadMilliVolts(0) / 500.0;
+  pinMode(0, INPUT_PULLUP);
+  bmp.takeForcedMeasurement();
+  aht.getEvent(&humidity, &temp);
+  t = temp.temperature;
+  h = humidity.relative_humidity;
+  pres = bmp.readPressure() / 100.0;
+  abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
+  bool isDataReady = false;
+  scd4x.getDataReadyFlag(isDataReady);
+  if (isDataReady) {
+  scd4x.readMeasurement(co2, temp2, hum);}
   displayMenu();
 }
 
@@ -398,7 +408,23 @@ void displayMenu(){
     if (facreset) {display.println("Reset!");}
     display.setCursor(200, 8*8); 
     if (wifireset) {display.println("Reset!");}
-
+  display.setCursor(0, 106); 
+  display.print("CO2: ");
+  display.print(co2);
+  display.print("ppm | Temp: ");
+  display.print(t);
+  display.print("c | Hum: ");
+  display.print(h);
+  display.print("%");
+  display.setCursor(0, 114); 
+  display.print("Pres: ");
+  display.print(pres);
+  display.print("hPa | vBat: ");
+  display.print(vBat);
+  display.print("v / ");
+  int batPct = mapf(vBat, 3.3, 4.15, 0, 100);
+  display.print(batPct);
+  display.print("% [10s]");
    display.display(true);
 }
 
@@ -437,6 +463,8 @@ void setupChart(){
         display.print("*");
         display.print(sleeptimeSecs, 0);
         display.print("s-->");
+        vBat = analogReadMilliVolts(0) / 500.0;
+        barx = mapf (vBat, 3.3, 4.15, 0, 19);
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -458,6 +486,8 @@ void setupChart2(){
         display.print("*");
         display.print(sleeptimeSecs, 0);
         display.print("s-->");
+        vBat = analogReadMilliVolts(0) / 500.0;
+        barx = mapf (vBat, 3.3, 4.15, 0, 19);
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -660,6 +690,7 @@ void doBatChart() {
         display.print(sleeptimeSecs, 0);
         display.print("s>");
         display.setCursor(175, 114);
+        vBat = analogReadMilliVolts(0) / 500.0;
         int batPct = mapf(vBat, 3.3, 4.15, 0, 100);
         display.setCursor(125, 0);
         display.print("[vBat: ");
@@ -703,7 +734,7 @@ void takeSamples(){
 void updateMain(){
 
 
-    display.setFullWindow();
+    display.setPartialWindow(0, 0, display.width(), display.height());
     display.fillScreen(GxEPD_WHITE);
         float co2todraw = array2[(maxArray - 1)];
         float temptodraw = array1[(maxArray - 1)];
@@ -748,7 +779,9 @@ void updateMain(){
         display.setTextSize(1);
         display.setCursor(0, 114-2);
         
-        if (WiFi.status() == WL_CONNECTED) {display.print(timeString);}
+        if (WiFi.status() == WL_CONNECTED) {display.print(timeString); display.print(", ");}
+        display.print(timetosleep);
+        display.print("mins");
 
         display.setTextSize(3);
 
@@ -768,7 +801,7 @@ void updateMain(){
 }
 
 void setup(){
-  vBat = analogReadMilliVolts(0) / 500.0;
+  
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
@@ -837,7 +870,7 @@ void setup(){
   
 
 
-
+  vBat = analogReadMilliVolts(0) / 500.0;
   if (GPIO_reason < 0) {
     startWifi();
     takeSamples();
@@ -888,9 +921,6 @@ void setup(){
         }
       wipeScreen();
       display.setPartialWindow(0, 0, display.width(), display.height());
-      display.setCursor(0, 0);
-        display.print("Connecting...");
-      display.display(true);
       startWifi();
       takeSamples();
       display.clearScreen();
@@ -966,7 +996,7 @@ void loop()
             wifireset = true;
             break;  
         case 7: 
-            gotosleep();
+            ESP.restart();
             break; 
       }
     }
@@ -1020,6 +1050,6 @@ void loop()
               Blynk.virtualWrite(V96, co2);
               Blynk.virtualWrite(V97, temp2);
     }
-
+    displayMenu();
   }
 }
