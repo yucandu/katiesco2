@@ -13,6 +13,11 @@
 #include <WiFiClientSecure.h>
 #include <BlynkSimpleEsp32.h>
 #include <SensirionI2CScd4x.h>
+
+#include <Preferences.h>
+
+Preferences preferences;
+
 SensirionI2CScd4x scd4x;
 
 Adafruit_AHTX0 aht;
@@ -25,7 +30,7 @@ int GPIO_reason;
 #include "esp_sleep.h"
 #include <ElegantOTA.h>
 #include <WiFiManager.h>      
-WiFiManager wifiManager;
+WiFiManager wm;
  WebServer server2(8080);
 
 const char* ssid = "mikesnet";
@@ -37,28 +42,38 @@ const char* password = "springchicken";
 #define sleeptimeSecs 300
 #define maxArray 501
 #define controlpin 10
+#define MENU_MAX 7
 #define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
 RTC_DATA_ATTR float array1[maxArray];
 RTC_DATA_ATTR float array2[maxArray];
 RTC_DATA_ATTR float array3[maxArray];
 RTC_DATA_ATTR float array4[maxArray];
 RTC_DATA_ATTR float windspeed, windgust, fridgetemp, outtemp;
+ int  timetosleep;
+RTC_DATA_ATTR int  failcount = 0;
+
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
   float t, h, pres, barx;
   float v41_value, v42_value, v62_value;
-
+char timeString[10]; // "12:34 PM" is 8 chars + null terminator
  RTC_DATA_ATTR   int firstrun = 100;
  RTC_DATA_ATTR   int page = 2;
+ int calibTarget = 430;
 float abshum;
  float minVal = 3.9;
  float maxVal = 4.2;
 RTC_DATA_ATTR int readingCount = 0; // Counter for the number of readings
 int readingTime;
-int menusel;
+int menusel = 1;
 uint16_t co2;
 float temp2, hum;
+bool editinterval = false;
+bool editcalib = false;
+bool calibrated = false;
+bool facreset = false;
+bool wifireset = false;
 
 #include "bitmaps/Bitmaps128x250.h"
 #include <Fonts/FreeMonoBold9pt7b.h>
@@ -196,7 +211,7 @@ void gotosleep() {
       uint64_t bitmask = BUTTON_PIN_BITMASK(GPIO_NUM_0) | BUTTON_PIN_BITMASK(GPIO_NUM_1) | BUTTON_PIN_BITMASK(GPIO_NUM_2) | BUTTON_PIN_BITMASK(GPIO_NUM_3) |  BUTTON_PIN_BITMASK(GPIO_NUM_5);
 
       esp_deep_sleep_enable_gpio_wakeup(bitmask, ESP_GPIO_WAKEUP_GPIO_LOW);
-      esp_sleep_enable_timer_wakeup(sleeptimeSecs * 1000000ULL);
+      esp_sleep_enable_timer_wakeup((timetosleep * 60) * 1000000ULL);
       delay(1);
       esp_deep_sleep_start();
       //esp_light_sleep_start();
@@ -206,17 +221,18 @@ void gotosleep() {
 
 
 void startWifi(){
-  WiFiManager wm;
-  if (wm.getWiFiIsSaved()){
+   bool isDataReady = false;
+   WiFi.mode(WIFI_STA);
+  if (wm.getWiFiIsSaved() && (failcount < 4)){
       //display.clearScreen();
       display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
       display.firstPage();
 
       do {
-        display.print("Connecting...");
+        display.print("Connecting to: " + (String)wm.getWiFiSSID());
       } while (display.nextPage());
-      WiFi.mode(WIFI_STA);
+      
       WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
       WiFi.setTxPower (WIFI_POWER_8_5dBm);
       // Wait for connection
@@ -225,14 +241,22 @@ void startWifi(){
           WiFi.setTxPower(WIFI_POWER_8_5dBm);
         }
         if (millis() > 20000) {
-            return;
+            failcount++;
+            break;
           }
           display.print(".");
       }
-      Blynk.config(bedroomauth, IPAddress(216,110,224,105), 8080);
-      Blynk.connect();
-      while ((!Blynk.connected()) && (millis() < 20000)){
-          delay(500);}
+      if (WiFi.status() == WL_CONNECTED) {
+        Blynk.config(bedroomauth, IPAddress(xxx,xxx,xxx,xxx), 8080);
+        Blynk.connect();
+        while ((!Blynk.connected()) && (millis() < 20000)){
+            delay(500);}
+      }
+           
+            scd4x.getDataReadyFlag(isDataReady);
+  while(!isDataReady){delay(250);
+  scd4x.getDataReadyFlag(isDataReady);}
+  scd4x.readMeasurement(co2, temp2, hum);
 
       if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
                 Blynk.virtualWrite(V91, t);
@@ -257,81 +281,124 @@ void startWifi(){
       localtime_r(&now, &timeinfo);
 
       // Allocate a char array for the time string
-      char timeString[10]; // "12:34 PM" is 8 chars + null terminator
+      
+
+      // Format the time string
+      if (timeinfo.tm_min < 10) {
+        snprintf(timeString, sizeof(timeString), "%d:0%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
+      } else {
+        snprintf(timeString, sizeof(timeString), "%d:%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
+      }
   }
-  bool isDataReady = false;
-  scd4x.getDataReadyFlag(isDataReady);
+  else {
+           
+            scd4x.getDataReadyFlag(isDataReady);
   while(!isDataReady){delay(250);
   scd4x.getDataReadyFlag(isDataReady);}
   scd4x.readMeasurement(co2, temp2, hum);
+  }
+
+
 }
 
 void startWebserver(){
 
-  //display.clearScreen();
+  
   display.setPartialWindow(0, 0, display.width(), display.height());
-  display.setCursor(0, 0);
-  display.firstPage();
-
-  do {
-    display.print("Connecting...");
-  } while (display.nextPage());
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);  
-  WiFi.setTxPower (WIFI_POWER_8_5dBm);
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    if (millis() > 20000) { display.print("!");}
-    if ((millis() > 30000)) {gotosleep();}
-    //do {
-      display.print(".");
-       display.display(true);
-    //} while (display.nextPage());
-    delay(1000);
-  }
-  Blynk.config(bedroomauth, IPAddress(192, 168, 50, 197), 8080);
-  Blynk.connect();
-  while ((!Blynk.connected()) && (millis() < 20000)){
-     // display.print(".");
-     //  display.display(true);
-       delay(500);}
   wipeScreen();
   display.setCursor(0, 0);
   display.firstPage();
-  do {
-    display.print("Connected! to: ");
-    display.println(WiFi.localIP());
-  } while (display.nextPage());
-  ArduinoOTA.setHostname("epaperdisplay");
-  ArduinoOTA.begin();
 
-  server2.on("/", []() {
-    server2.send(200, "text/plain", "Hi! This is ElegantOTA Demo.");
-  });
-
-  ElegantOTA.begin(&server2);    // Start ElegantOTA
- 
-  server2.begin();
   
+  display.print("Connecting...");
+  display.display(true);
+  WiFi.mode(WIFI_STA);
+  if (wm.getWiFiIsSaved()){
+
+      
+      WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
+
+  //WiFi.mode(WIFI_STA);
+  //WiFi.begin(ssid, password);  
+  WiFi.setTxPower (WIFI_POWER_8_5dBm);
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    if (millis() > 20000) { break;}
+    delay(1000);
+  }
+   if (WiFi.status() == WL_CONNECTED) {
+    Blynk.config(bedroomauth, IPAddress(192, 168, 50, 197), 8080);
+    Blynk.connect();
+    while ((!Blynk.connected()) && (millis() < 20000)){delay(100);}
+    
+    wipeScreen();
+    display.setCursor(0, 0);
+    display.firstPage();
+    do {
+      display.print("Connected! to: ");
+      display.println(WiFi.localIP());
+    } while (display.nextPage());
+    ArduinoOTA.setHostname("epaperdisplay");
+    ArduinoOTA.begin();
+
+    server2.on("/", []() {
+      server2.send(200, "text/plain", "Hi! This is ElegantOTA Demo.");
+    });
+
+    ElegantOTA.begin(&server2);    // Start ElegantOTA
+  
+    server2.begin();
+   }
+  }
   displayMenu();
 }
 
 void displayMenu(){
   display.setPartialWindow(0, 0, display.width(), display.height());
+  display.setTextSize(1);
   display.fillScreen(GxEPD_WHITE);
   display.setCursor(0, 0);
   display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
+   if (WiFi.status() == WL_CONNECTED) {
   display.print("Connected! to: ");
   display.println(WiFi.localIP());
   display.print("RSSI: ");
   display.println(WiFi.RSSI());
   display.println("");
+   }
+   else {display.setCursor(0, 8*4);}
     if (menusel == 1) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("Start WifiManager");
     if (menusel == 2) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
-    display.println("Change Sleeptime");
+    display.println("Change Interval");
     if (menusel == 3) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.println("Set Calibration Value");
+    if (menusel == 4) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.println("Calibrate");
+    if (menusel == 5) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.println("Factory Reset SCD41");
+    if (menusel == 6) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.println("Forget Wifi");
+    if (menusel == 7) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("Exit");
+
+    display.setCursor(200, 8*4); 
+    if (editinterval) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.print(timetosleep);
+    display.println(" mins");
+    display.setCursor(200, 8*5); 
+    if (editcalib) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.print(calibTarget);
+    display.println(" ppm");
+    
+    display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
+    display.setCursor(200, 8*6); 
+    if (calibrated) {display.println("Calibrated!");}
+    display.setCursor(200, 8*7); 
+    if (facreset) {display.println("Reset!");}
+    display.setCursor(200, 8*8); 
+    if (wifireset) {display.println("Reset!");}
+
    display.display(true);
 }
 
@@ -634,19 +701,8 @@ void takeSamples(){
 }
 
 void updateMain(){
-  time_t now = time(NULL);
-  struct tm timeinfo;
-  localtime_r(&now, &timeinfo);
 
-  // Allocate a char array for the time string
-  char timeString[10]; // "12:34 PM" is 8 chars + null terminator
 
-  // Format the time string
-  if (timeinfo.tm_min < 10) {
-    snprintf(timeString, sizeof(timeString), "%d:0%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
-  } else {
-    snprintf(timeString, sizeof(timeString), "%d:%d %s", timeinfo.tm_hour % 12 == 0 ? 12 : timeinfo.tm_hour % 12, timeinfo.tm_min, timeinfo.tm_hour < 12 ? "AM" : "PM");
-  }
     display.setFullWindow();
     display.fillScreen(GxEPD_WHITE);
         float co2todraw = array2[(maxArray - 1)];
@@ -691,7 +747,8 @@ void updateMain(){
         display.print("%");
         display.setTextSize(1);
         display.setCursor(0, 114-2);
-        display.print(timeString);
+        
+        if (WiFi.status() == WL_CONNECTED) {display.print(timeString);}
 
         display.setTextSize(3);
 
@@ -715,6 +772,9 @@ void setup(){
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
+  preferences.begin("my-app", false);
+  timetosleep = preferences.getUInt("timetosleep", 5);
+  preferences.end();
   Wire.begin();  
   scd4x.begin(Wire);
   scd4x.wakeUp();
@@ -826,13 +886,11 @@ void setup(){
             startWebserver();
           return;}
         }
+      wipeScreen();
       display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
-      display.firstPage();
-
-      do {
         display.print("Connecting...");
-      } while (display.nextPage());
+      display.display(true);
       startWifi();
       takeSamples();
       display.clearScreen();
@@ -861,35 +919,107 @@ void setup(){
 
 void loop()
 {
-  server2.handleClient();
-  ElegantOTA.loop();
-  Blynk.run();
-  ArduinoOTA.handle();
+  if (WiFi.status() == WL_CONNECTED) {
+    ArduinoOTA.handle();
+    server2.handleClient();
+    ElegantOTA.loop();
+  }
+  if (Blynk.connected()) {Blynk.run();}
+
+
   if (!digitalRead(5)) {
-    switch (menusel) {
-      case 1:
-      { 
-            WiFiManager wm;
-            wm.setConfigPortalTimeout(300);
-            wm.startConfigPortal("CO2 Wifi Setup");
-              break; 
+      switch (menusel) {
+        case 1:
+          { 
+                failcount = 0;
+                wm.setConfigPortalTimeout(300);
+                wm.startConfigPortal("CO2 Wifi Setup");
+                break; 
+          }
+        case 2: 
+            editinterval = !editinterval;
+            preferences.begin("my-app", false);
+            preferences.putUInt("timetosleep", timetosleep);
+            preferences.end();
+            displayMenu();
+            break; 
+        case 3: 
+            editcalib = !editcalib;
+            displayMenu();
+            break;
+        case 4: 
+            scd4x.stopPeriodicMeasurement();
+            uint16_t error;
+            scd4x.performForcedRecalibration(calibTarget, error);
+            scd4x.startPeriodicMeasurement();
+            calibrated = true;
+            displayMenu();
+            break; 
+        case 5:    
+            scd4x.stopPeriodicMeasurement();
+            scd4x.performFactoryReset();
+            scd4x.startPeriodicMeasurement();
+            facreset = true;
+            break;  
+        case 6:    
+            wm.resetSettings();
+            wifireset = true;
+            break;  
+        case 7: 
+            gotosleep();
+            break; 
       }
-      case 2: 
-      break; 
-      case 3: 
-      ESP.restart();
-              break; 
-    }
-    gotosleep();
     }
   every (100){
+
     if (!digitalRead(1)) {
-      menusel++;
-      if (menusel > 3) {menusel = 1;}
+      calibrated = false;
+      facreset = false;
+      wifireset = false;
+      if (editinterval) {timetosleep--;} else if (editcalib) {calibTarget -= 5;} else {menusel++;}
+      if (menusel > MENU_MAX) {menusel = 1;}
+      if (menusel < 1) {menusel = MENU_MAX;}
+      if (timetosleep < 1) {timetosleep = 1;}
+      if (timetosleep > 999) {timetosleep = 999;}
       displayMenu();
     }
-    if (!digitalRead(0)) {menusel--;
-    displayMenu();
+    if (!digitalRead(0)) {
+      calibrated = false;
+      facreset = false;
+      wifireset = false;
+      if (editinterval) {timetosleep++;} else if (editcalib) {calibTarget += 5;} else {menusel--;}
+      if (menusel > MENU_MAX) {menusel = 1;}
+      if (menusel < 1) {menusel = MENU_MAX;}
+      if (timetosleep < 1) {timetosleep = 1;}
+      if (timetosleep > 999) {timetosleep = 999;}
+      displayMenu();
     }
+
+  }
+
+  every (10000) {
+    pinMode(0, INPUT);
+    vBat = analogReadMilliVolts(0) / 500.0;
+    pinMode(0, INPUT_PULLUP);
+    bmp.takeForcedMeasurement();
+    aht.getEvent(&humidity, &temp);
+    t = temp.temperature;
+    h = humidity.relative_humidity;
+    pres = bmp.readPressure() / 100.0;
+    abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
+    bool isDataReady = false;
+    scd4x.getDataReadyFlag(isDataReady);
+    if (isDataReady) {
+    scd4x.readMeasurement(co2, temp2, hum);}
+    if (Blynk.connected()) {
+              Blynk.virtualWrite(V91, t);
+              Blynk.virtualWrite(V92, h);
+              Blynk.virtualWrite(V93, pres);
+              Blynk.virtualWrite(V94, abshum);
+              Blynk.virtualWrite(V95, vBat);
+              Blynk.virtualWrite(V96, co2);
+              Blynk.virtualWrite(V97, temp2);
+    }
+
   }
 }
