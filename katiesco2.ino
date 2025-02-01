@@ -40,7 +40,7 @@ const char* password = "springchicken";
 #define ENABLE_GxEPD2_GFX 1
 #define TEMP_OFFSET 0.8
 #define sleeptimeSecs 300
-#define maxArray 400
+#define maxArray 501
 #define controlpin 10
 #define MENU_MAX 7
 #define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
@@ -448,6 +448,17 @@ void wipeScreen(){
 
 }
 
+void batCheck() {
+  if (vBat < 3.3){
+  display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
+  display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
+  display.setCursor(10,10);
+  display.setTextSize(3);
+  display.print("LOW BATTERY");
+  display.display(true);
+ }
+}
+
 void setupChart(){
         
         display.setCursor(0, 0);
@@ -543,6 +554,7 @@ void doTempChart() {
     } while (display.nextPage());
 
     display.setFullWindow();
+    batCheck();
     gotosleep();
 }
 
@@ -588,12 +600,14 @@ void doCO2Chart() {
     } while (display.nextPage());
 
     display.setFullWindow();
+    batCheck();
     gotosleep();
 }
 
 void doMainDisplay() {        
   wipeScreen();
   updateMain();
+  batCheck();
   gotosleep();
 }
 
@@ -639,6 +653,7 @@ void doPresDisplay() {
     } while (display.nextPage());
 
     display.setFullWindow();
+    batCheck();
     gotosleep();
 }
 
@@ -700,6 +715,7 @@ void doBatChart() {
     } while (display.nextPage());
 
     display.setFullWindow();
+    batCheck();
     gotosleep();
 }
 
@@ -800,7 +816,7 @@ void updateMain(){
 }
 
 void setup(){
-  vBat = analogReadMilliVolts(0) / 500.0;
+  
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
@@ -841,14 +857,6 @@ void setup(){
   digitalWrite(controlpin, HIGH);
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
   display.setRotation(3);
-   if (vBat < 3.3){
-  display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
-  display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
-  display.setCursor(10,10);
-  display.setTextSize(3);
-  display.print("LOW BATTERY");
-  gotosleep();
- }
   display.setTextSize(1);
   pinMode(0, INPUT_PULLUP );
   pinMode(1, INPUT_PULLUP );
@@ -877,6 +885,7 @@ void setup(){
   
 
 
+  vBat = analogReadMilliVolts(0) / 500.0;
   if (GPIO_reason < 0) {
     startWifi();
     takeSamples();
