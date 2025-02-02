@@ -412,6 +412,7 @@ void displayMenu(){
   display.print(co2);
   display.print("ppm | Temp: ");
   display.print(t);
+  display.print((char)247);
   display.print("c | Hum: ");
   display.print(h);
   display.print("%");
@@ -549,6 +550,7 @@ void doTempChart() {
         display.print("[");
         display.print("Temp: ");
         display.print(array1[(maxArray - 1)], 3);
+        display.print((char)247);
         display.print("c");
         display.print("]");
     } while (display.nextPage());
@@ -783,6 +785,7 @@ void updateMain(){
 
         display.print(temptodraw, 1);
         display.setTextSize(2);
+        display.print((char)247);
         display.print("c");
 
 
