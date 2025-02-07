@@ -75,13 +75,14 @@ bool calibrated = false;
 bool facreset = false;
 bool wifireset = false;
 
-#include "bitmaps/Bitmaps128x250.h"
-#include <Fonts/FreeMonoBold9pt7b.h>
-#include <Fonts/Roboto_Condensed_12.h>
-#include <Fonts/FreeSerif12pt7b.h> 
-#include <Fonts/Open_Sans_Condensed_Bold_54.h> 
-#include <Fonts/DejaVu_Serif_Condensed_36.h>
-#include <Fonts/DejaVu_Serif_Condensed_60.h>
+
+#include <Fonts/Open_Sans_Condensed_Bold_36.h> 
+#include <Fonts/FreeSans9pt7b.h> 
+
+#define FONT1  //default
+#define FONT2 &FreeSans9pt7b
+#define FONT3 &Open_Sans_Condensed_Bold_36
+
 #define BUTTON_PIN_BITMASK(GPIO) (1ULL << GPIO)
 GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=5*/ SS, /*DC=*/ 21, /*RES=*/ 20, /*BUSY=*/ 3)); // DEPG0213BN 122x250, SSD1680
 
@@ -369,7 +370,7 @@ void displayMenu(){
   display.setCursor(0, 0);
   display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
    if (WiFi.status() == WL_CONNECTED) {
-  display.print("Connected! to: ");
+  display.print("Connected! to: "); //http://moeburn.mooo.com/public-dashboards/e3bb4dccb20d426ba449c2842d306c2b
   display.println(WiFi.localIP());
   display.print("RSSI: ");
   display.println(WiFi.RSSI());
@@ -454,7 +455,8 @@ void batCheck() {
   display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
   display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
   display.setCursor(10,10);
-  display.setTextSize(3);
+  display.setFont(FONT3);
+display.setTextSize(1);
   display.print("LOW BATTERY");
   display.display(true);
  }
@@ -750,7 +752,9 @@ void takeSamples(){
 
 void updateMain(){
 
-
+    int yadj = 25;
+    int yadj2 = 12;
+    int fontsize1 = 1;
     display.setPartialWindow(0, 0, display.width(), display.height());
     display.fillScreen(GxEPD_WHITE);
         float co2todraw = array2[(maxArray - 1)];
@@ -761,60 +765,72 @@ void updateMain(){
         display.drawLine(0, 60, 250, 60, GxEPD_BLACK);
         display.drawLine(0, 61, 250, 61, GxEPD_BLACK);
 
-        display.setTextSize(2);
-        display.setCursor(32,2);
-        display.print("CO2:");
-        display.setCursor(158,2);
-        display.print("Temp:");
-        display.setCursor(8,64);
-        display.print("Humidity:");
-        display.setCursor(136,64);
-        display.print("Pressure:");
+        display.setFont(FONT2);
+        display.setCursor(32,2+yadj2);
+        display.print(" CO2");
+        display.setCursor(150,2+yadj2);
+        display.print(" Temp");
+        display.setCursor(8,64+yadj2);
+        display.print("  Humidity");
+        display.setCursor(136,64+yadj2);
+        display.print("  Pressure");
 
-        display.setTextSize(3);
-        display.setCursor(5,26);
+        display.setFont(FONT3);
+        display.setTextSize(1);
+        display.setCursor(18,26+yadj);
         if ((co2todraw > 0) && (co2todraw < 1000)) {display.print(" ");}
         display.print(co2todraw, 0);
-        display.setTextSize(2);
+        display.setFont(FONT1);
+        display.setTextSize(fontsize1);
         display.print("ppm");
 
 
         
-        display.setTextSize(3);
-        display.setCursor(148,26);
+        display.setFont(FONT3);
+        display.setTextSize(1);
+        display.setCursor(155,26+yadj);
 
         display.print(temptodraw, 1);
-        display.setTextSize(2);
+        display.setFont(FONT1);
+        display.setTextSize(fontsize1);
         display.print((char)247);
         display.print("c");
 
 
-        display.setTextSize(3);
-        display.setCursor(20,87);
+        display.setFont(FONT3);
+        display.setTextSize(1);
+        display.setCursor(20,87+yadj);
         display.print(h, 1);
-        display.setTextSize(2);
+        display.setFont(FONT1);
+        display.setTextSize(fontsize1);
         display.print("%");
         display.setTextSize(1);
-        display.setCursor(0, 114-2);
+        display.setCursor(0, 115);
+        display.setFont(FONT1);
         
         if (WiFi.status() == WL_CONNECTED) {display.print(timeString); display.print(", ");}
         display.print(timetosleep);
         display.print("mins");
 
-        display.setTextSize(3);
+        display.setFont(FONT3);
+        display.setTextSize(1);
 
-        display.setCursor(148,87);
+        display.setCursor(155,87+yadj);
         display.print(pres, 0);
-        display.setTextSize(2);
+        display.setFont(FONT1);
+        display.setTextSize(fontsize1);
         display.print("hPa");
-        display.setTextSize(3);
+        display.setFont(FONT3);
+        display.setTextSize(1);
         barx = mapf (vBat, 3.3, 4.15, 0, 19);
         if (barx > 19) {barx = 19;}
-        display.drawRect(229,114-2,19,7,GxEPD_BLACK);
-        display.fillRect(229,114-2,barx,7,GxEPD_BLACK); 
-        display.drawLine(248,115-2,248,119-2,GxEPD_BLACK);
-        display.drawLine(249,115-2,249,119-2,GxEPD_BLACK);
+        display.drawRect(229,114-0,19,7,GxEPD_BLACK);
+        display.fillRect(229,114-0,barx,7,GxEPD_BLACK); 
+        display.drawLine(248,115-0,248,119-0,GxEPD_BLACK);
+        display.drawLine(249,115-0,249,119-0,GxEPD_BLACK);
 
+        //display.drawRect(0,0,display.width(), display.height(), GxEPD_BLACK);
+        display.setFont(FONT1);
         display.display(true);
 }
 
