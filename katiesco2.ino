@@ -193,13 +193,13 @@ void gotosleep() {
       delay(10);
       WiFi.disconnect();
       display.hibernate();
-      SPI.end();
+      //SPI.end();
       Wire.end();
-      pinMode(SS, INPUT_PULLUP );
-      pinMode(6, INPUT_PULLUP );
-      pinMode(4, INPUT_PULLUP );
-      pinMode(8, INPUT_PULLUP );
-      pinMode(9, INPUT_PULLUP );
+      pinMode(SS, INPUT );
+      pinMode(6, INPUT );
+      pinMode(4, INPUT );
+      pinMode(8, INPUT );
+      pinMode(9, INPUT );
       pinMode(1, INPUT_PULLUP );
       pinMode(2, INPUT_PULLUP );
       pinMode(3, INPUT_PULLUP );
@@ -335,7 +335,7 @@ void startWebserver(){
       display.print("Connected! to: ");
       display.println(WiFi.localIP());
     } while (display.nextPage());
-    ArduinoOTA.setHostname("epaperdisplay");
+    ArduinoOTA.setHostname("katieco2");
     ArduinoOTA.begin();
 
     server2.on("/", []() {
@@ -423,7 +423,7 @@ void displayMenu(){
   display.print("hPa | vBat: ");
   display.print(vBat);
   display.print("v / ");
-  int batPct = mapf(vBat, 3.3, 4.15, 0, 100);
+  int batPct = mapf(vBat, 3.3, 4.05, 0, 100);
   display.print(batPct);
   display.print("% [10s]");
    display.display(true);
@@ -451,10 +451,10 @@ void wipeScreen(){
 }
 
 void batCheck() {
-  if (vBat < 3.3){
+  if (vBat < 3.4){
   display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
   display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
-  display.setCursor(10,10);
+  display.setCursor(10,60);
   display.setFont(FONT3);
 display.setTextSize(1);
   display.print("LOW BATTERY");
@@ -477,7 +477,7 @@ void setupChart(){
         display.print(timetosleep * 60, 0);
         display.print("s-->");
         vBat = analogReadMilliVolts(0) / 500.0;
-        barx = mapf (vBat, 3.3, 4.15, 0, 19);
+        barx = mapf (vBat, 3.3, 4.05, 0, 19);
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -500,7 +500,7 @@ void setupChart2(){
         display.print(timetosleep * 60, 0);
         display.print("s-->");
         vBat = analogReadMilliVolts(0) / 500.0;
-        barx = mapf (vBat, 3.3, 4.15, 0, 19);
+        barx = mapf (vBat, 3.3, 4.05, 0, 19);
         display.drawRect(229,114,19,7,GxEPD_BLACK);
         display.fillRect(229,114,barx,7,GxEPD_BLACK); 
         display.drawLine(248,115,248,119,GxEPD_BLACK);
@@ -709,7 +709,7 @@ void doBatChart() {
         display.print("s>");
         display.setCursor(175, 114);
         vBat = analogReadMilliVolts(0) / 500.0;
-        int batPct = mapf(vBat, 3.3, 4.15, 0, 100);
+        int batPct = mapf(vBat, 3.3, 4.05, 0, 100);
         display.setCursor(125, 0);
         display.print("[vBat: ");
         display.print(vBat, 3);
@@ -822,7 +822,7 @@ void updateMain(){
         display.print("hPa");
         display.setFont(FONT3);
         display.setTextSize(1);
-        barx = mapf (vBat, 3.3, 4.15, 0, 19);
+        barx = mapf (vBat, 3.3, 4.05, 0, 19);
         if (barx > 19) {barx = 19;}
         display.drawRect(229,114-0,19,7,GxEPD_BLACK);
         display.fillRect(229,114-0,barx,7,GxEPD_BLACK); 
@@ -836,7 +836,7 @@ void updateMain(){
 
 void setup(){
   
-        barx = mapf (vBat, 3.3, 4.15, 0, 19);
+        barx = mapf (vBat, 3.3, 4.05, 0, 19);
         if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
   preferences.begin("my-app", false);
