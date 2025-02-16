@@ -43,6 +43,7 @@ const char* password = "springchicken";
 #define maxArray 501
 #define controlpin 10
 #define MENU_MAX 7
+#define TIME_TIMEOUT 20000
 #define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
 RTC_DATA_ATTR float array1[maxArray];
 RTC_DATA_ATTR float array2[maxArray];
@@ -50,6 +51,7 @@ RTC_DATA_ATTR float array3[maxArray];
 RTC_DATA_ATTR float array4[maxArray];
 RTC_DATA_ATTR float windspeed, windgust, fridgetemp, outtemp;
  int  timetosleep = 5;
+ bool isSetNtp = false;  
 RTC_DATA_ATTR int  failcount = 0;
 
 const char* ntpServer = "pool.ntp.org";
@@ -219,6 +221,17 @@ void gotosleep() {
       delay(1000);
 }
 
+void initTime(String timezone){
+  configTzTime(timezone.c_str(), "time.cloudflare.com", "pool.ntp.org", "time.nist.gov");
+
+  /*while ((!isSetNtp) && (millis() < TIME_TIMEOUT)) {
+        delay(1000);
+        display.print("@");
+        display.display(true);
+        }*/
+
+}
+
 
 
 void startWifi(){
@@ -236,20 +249,30 @@ void startWifi(){
       // Wait for connection
       while (WiFi.status() != WL_CONNECTED) {
         if (millis() > 10000) { 
-          WiFi.setTxPower(WIFI_POWER_8_5dBm);
+          display.print("!");
         }
         if (millis() > 20000) {
             failcount++;
             break;
           }
           display.print(".");
+          display.display(true);
+          delay(1000);
       }
       if (WiFi.status() == WL_CONNECTED) {
-        Blynk.config(bedroomauth, IPAddress(216,110,224,105), 8080);
+        display.print("Connected. Getting time...");
+        initTime("EST5EDT,M3.2.0,M11.1.0");
+        Blynk.config(bedroomauth, IPAddress(xxx,xxx,xxx,xxx), 8080);
         Blynk.connect();
         while ((!Blynk.connected()) && (millis() < 20000)){
             delay(500);}
       }
+  else
+  {
+    display.print("Connection timed out. :(");
+  }
+  display.display(true);
+  
            
             scd4x.getDataReadyFlag(isDataReady);
   while(!isDataReady){delay(250);
