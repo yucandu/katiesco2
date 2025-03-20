@@ -13,7 +13,7 @@
 #include <WiFiClientSecure.h>
 #include <BlynkSimpleEsp32.h>
 #include <SensirionI2CScd4x.h>
-
+#include "kirby.h"
 #include <Preferences.h>
 
 Preferences preferences;
@@ -221,6 +221,12 @@ void gotosleep() {
       delay(1000);
 }
 
+#include "esp_sntp.h"
+void cbSyncTime(struct timeval *tv) { // callback function to show when NTP was synchronized
+  Serial.println("NTP time synched");
+  isSetNtp = true;
+}
+
 void initTime(String timezone){
   configTzTime(timezone.c_str(), "time.cloudflare.com", "pool.ntp.org", "time.nist.gov");
 
@@ -232,46 +238,67 @@ void initTime(String timezone){
 
 }
 
-
+void drawBusy() {
+  // Position just left of battery icon
+  
+  int xOffset = 5;
+  int yOffset = 3;
+  int x = 250 - 38 - 2 - xOffset - 15; // 15 pixels left of battery
+  int y = 122 - 10 - yOffset;
+  display.fillRect(x-1, y-1, 9, 11, GxEPD_WHITE);
+  // Draw hourglass shape (8x10 pixels)
+  display.drawLine(x, y, x+6, y, GxEPD_BLACK);       // Top line
+  display.drawLine(x, y+8, x+6, y+8, GxEPD_BLACK);   // Bottom line
+  display.drawLine(x, y, x+3, y+4, GxEPD_BLACK);     // Top left diagonal
+  display.drawLine(x+6, y, x+3, y+4, GxEPD_BLACK);   // Top right diagonal
+  display.drawLine(x, y+8, x+3, y+4, GxEPD_BLACK);   // Bottom left diagonal
+  display.drawLine(x+6, y+8, x+3, y+4, GxEPD_BLACK); // Bottom right diagonal
+  
+  // Update only the hourglass area
+  display.displayWindow(x-1, y-1, 9, 11);
+}
 
 void startWifi(){
    bool isDataReady = false;
    WiFi.mode(WIFI_STA);
   if (wm.getWiFiIsSaved() && (failcount < 4)){
+      drawBusy();
       //display.clearScreen();
-      display.setPartialWindow(0, 0, display.width(), display.height());
+      //display.drawInvertedBitmap(0, 0, kirby, 250, 122, GxEPD_BLACK);
+      //display.display(true);
+      /*display.setPartialWindow(0, 0, display.width(), display.height());
       display.setCursor(0, 0);
-
-        display.print("Connecting to: " + (String)wm.getWiFiSSID());
-      display.display(true);
+      
+      display.print("Connecting to: " + (String)wm.getWiFiSSID());
+      display.display(true);*/
       WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
       WiFi.setTxPower (WIFI_POWER_8_5dBm);
       // Wait for connection
       while (WiFi.status() != WL_CONNECTED) {
         if (millis() > 10000) { 
-          display.print("!");
+          //display.print("!");
         }
         if (millis() > 20000) {
             failcount++;
             break;
           }
-          display.print(".");
-          display.display(true);
+          //display.print(".");
+          //display.display(true);
           delay(1000);
       }
       if (WiFi.status() == WL_CONNECTED) {
-        display.print("Connected. Getting time...");
+        //display.print("Connected. Getting time...");
         initTime("EST5EDT,M3.2.0,M11.1.0");
-        Blynk.config(bedroomauth, IPAddress(xxx,xxx,xxx,xxx), 8080);
+        Blynk.config(bedroomauth, IPAddress(x,x,x,x), 8080);
         Blynk.connect();
         while ((!Blynk.connected()) && (millis() < 20000)){
             delay(500);}
       }
   else
   {
-    display.print("Connection timed out. :(");
+    //display.print("Connection timed out. :(");
   }
-  display.display(true);
+  //display.display(true);
   
            
             scd4x.getDataReadyFlag(isDataReady);
@@ -898,7 +925,7 @@ void setup(){
   pinMode(controlpin, OUTPUT);
   digitalWrite(controlpin, HIGH);
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
-  display.setRotation(3);
+  display.setRotation(1);
   display.setTextSize(1);
   pinMode(0, INPUT_PULLUP );
   pinMode(1, INPUT_PULLUP );
@@ -964,6 +991,16 @@ void setup(){
       doCO2Chart();
       break;
     case 0: 
+      delay(50); // debounce
+      while (!digitalRead(0)) {
+        delay(10);
+        if (millis() > 3000) {
+          display.drawInvertedBitmap(0, 0, kirby, 250, 122, GxEPD_BLACK);
+          display.display(true);
+          gotosleep();
+          return;
+        }
+      }
       page = 4;
       doBatChart();
       break;
@@ -1093,7 +1130,15 @@ void loop()
       if (timetosleep > 999) {timetosleep = 999;}
       displayMenu();
     }
-
+    if (!digitalRead(2)) {
+      if (menusel == 7) {
+        display.fillScreen(GxEPD_WHITE);
+        display.drawInvertedBitmap(0, 0, kirby, 250, 122, GxEPD_BLACK);
+        display.display(true);
+        delay(1000);
+        gotosleep();
+      }
+    }
   }
 
   every (10000) {
