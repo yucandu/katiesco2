@@ -42,7 +42,7 @@ const char* password = "springchicken";
 #define sleeptimeSecs 300
 #define maxArray 501
 #define controlpin 10
-#define MENU_MAX 7
+#define MENU_MAX 8
 #define TIME_TIMEOUT 20000
 #define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
 RTC_DATA_ATTR float array1[maxArray];
@@ -54,7 +54,8 @@ RTC_DATA_ATTR float windspeed, windgust, fridgetemp, outtemp;
  bool isSetNtp = false;  
 RTC_DATA_ATTR int  failcount = 0;
 bool wifisaved = false;
-
+bool rotateDisplay = false;
+bool editrotate = false; 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
@@ -283,7 +284,7 @@ void startWifi(){
       if (WiFi.status() == WL_CONNECTED) {
         //display.print("Connected. Getting time...");
         initTime("EST5EDT,M3.2.0,M11.1.0");
-        Blynk.config(bedroomauth, IPAddress(x,x,x,x), 8080);
+        Blynk.config(bedroomauth, IPAddress(216,110,224,105), 8080);
         Blynk.connect();
         while ((!Blynk.connected()) && (millis() < 20000)){
             delay(500);}
@@ -436,6 +437,8 @@ void displayMenu(){
     if (menusel == 6) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("Forget Wifi");
     if (menusel == 7) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.println("Rotate?");
+    if (menusel == 8) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
     display.println("Exit");
 
     display.setCursor(200, 8*4); 
@@ -454,6 +457,10 @@ void displayMenu(){
     if (facreset) {display.println("Reset!");}
     display.setCursor(200, 8*8); 
     if (wifireset) {display.println("Reset!");}
+    display.setCursor(200, 8*9); 
+    if (editrotate) {display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);} else {display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);}
+    display.print(rotateDisplay ? "Yes" : "No");
+    display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
   display.setCursor(0, 106); 
   display.print("CO2: ");
   display.print(co2);
@@ -883,6 +890,7 @@ void setup(){
   preferences.begin("my-app", false);
     timetosleep = preferences.getUInt("timetosleep", 5);
     wifisaved = preferences.getBool("wifisaved", false);
+    rotateDisplay = preferences.getBool("rotate", false);
   preferences.end();
   Wire.begin();  
   scd4x.begin(Wire);
@@ -916,7 +924,7 @@ void setup(){
   pinMode(controlpin, OUTPUT);
   digitalWrite(controlpin, HIGH);
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
-  display.setRotation(1);
+  display.setRotation(rotateDisplay ? 3 : 1);
   display.setTextSize(1);
   pinMode(0, INPUT_PULLUP );
   pinMode(1, INPUT_PULLUP );
@@ -1088,7 +1096,14 @@ void loop()
             preferences.putBool("wifisaved", wifisaved);
             preferences.end();
             break;  
-        case 7: 
+        case 7:
+            editrotate = !editrotate;
+            preferences.begin("my-app", false);
+            preferences.putBool("rotate", rotateDisplay);
+            preferences.end();
+            displayMenu();
+            break;
+        case 8: 
             ESP.restart();
             break; 
       }
@@ -1099,7 +1114,15 @@ void loop()
       calibrated = false;
       facreset = false;
       wifireset = false;
-      if (editinterval) {timetosleep--;} else if (editcalib) {calibTarget -= 5;} else {menusel++;}
+      if (editrotate) {
+          rotateDisplay = !rotateDisplay;
+      } else if (editinterval) {
+          timetosleep += rotateDisplay ? 1 : -1;
+      } else if (editcalib) {
+          calibTarget += rotateDisplay ? 5 : -5;
+      } else {
+          menusel += rotateDisplay ? -1 : 1;
+      }
       if (menusel > MENU_MAX) {menusel = 1;}
       if (menusel < 1) {menusel = MENU_MAX;}
       if (timetosleep < 1) {timetosleep = 1;}
@@ -1110,7 +1133,15 @@ void loop()
       calibrated = false;
       facreset = false;
       wifireset = false;
-      if (editinterval) {timetosleep++;} else if (editcalib) {calibTarget += 5;} else {menusel--;}
+      if (editrotate) {
+          rotateDisplay = !rotateDisplay;
+      } else if (editinterval) {
+          timetosleep += rotateDisplay ? -1 : 1;
+      } else if (editcalib) {
+          calibTarget += rotateDisplay ? -5 : 5;
+      } else {
+          menusel += rotateDisplay ? 1 : -1;
+      }
       if (menusel > MENU_MAX) {menusel = 1;}
       if (menusel < 1) {menusel = MENU_MAX;}
       if (timetosleep < 1) {timetosleep = 1;}
