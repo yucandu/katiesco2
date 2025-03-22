@@ -53,6 +53,7 @@ RTC_DATA_ATTR float windspeed, windgust, fridgetemp, outtemp;
  int  timetosleep = 5;
  bool isSetNtp = false;  
 RTC_DATA_ATTR int  failcount = 0;
+bool wifisaved = false;
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
@@ -259,18 +260,11 @@ void drawBusy() {
 }
 
 void startWifi(){
+  drawBusy();
    bool isDataReady = false;
    WiFi.mode(WIFI_STA);
-  if (wm.getWiFiIsSaved() && (failcount < 4)){
-      drawBusy();
-      //display.clearScreen();
-      //display.drawInvertedBitmap(0, 0, kirby, 250, 122, GxEPD_BLACK);
-      //display.display(true);
-      /*display.setPartialWindow(0, 0, display.width(), display.height());
-      display.setCursor(0, 0);
-      
-      display.print("Connecting to: " + (String)wm.getWiFiSSID());
-      display.display(true);*/
+  if (wifisaved && (failcount < 4)){
+
       WiFi.begin(wm.getWiFiSSID(), wm.getWiFiPass());
       WiFi.setTxPower (WIFI_POWER_8_5dBm);
       // Wait for connection
@@ -324,6 +318,8 @@ void startWifi(){
               Blynk.virtualWrite(V97, temp2);
               if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
         struct tm timeinfo;
+        setenv("TZ","EST5EDT,M3.2.0,M11.1.0",1);  //  Now adjust the TZ.  Clock settings are adjusted to show the new local time
+        tzset();
         getLocalTime(&timeinfo);
         time_t now = time(NULL);
       localtime_r(&now, &timeinfo);
@@ -351,11 +347,11 @@ void startWifi(){
 
 void startWebserver(){
 
-  
-
-  if (wm.getWiFiIsSaved()){
-  display.setPartialWindow(0, 0, display.width(), display.height());
   wipeScreen();
+
+  if (wifisaved){
+  display.setPartialWindow(0, 0, display.width(), display.height());
+  
   display.setCursor(0, 0);
 
   
@@ -453,7 +449,7 @@ void displayMenu(){
     
     display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
     display.setCursor(200, 8*6); 
-    if (calibrated) {display.println("Calibrated!");}
+    if (calibrated) {display.println("DONE!");}
     display.setCursor(200, 8*7); 
     if (facreset) {display.println("Reset!");}
     display.setCursor(200, 8*8); 
@@ -496,8 +492,6 @@ void wipeScreen(){
     } while (display.nextPage());
     display.firstPage();
 
-
-
 }
 
 void batCheck() {
@@ -509,6 +503,7 @@ void batCheck() {
 display.setTextSize(1);
   display.print("LOW BATTERY");
   display.display(true);
+  gotosleep();
  }
 }
 
@@ -608,8 +603,7 @@ void doTempChart() {
     } while (display.nextPage());
 
     display.setFullWindow();
-    batCheck();
-    gotosleep();
+
 }
 
 void doCO2Chart() {
@@ -654,15 +648,13 @@ void doCO2Chart() {
     } while (display.nextPage());
 
     display.setFullWindow();
-    batCheck();
-    gotosleep();
+
 }
 
 void doMainDisplay() {        
   wipeScreen();
   updateMain();
-  batCheck();
-  gotosleep();
+
 }
 
 void doPresDisplay() {
@@ -707,8 +699,7 @@ void doPresDisplay() {
     } while (display.nextPage());
 
     display.setFullWindow();
-    batCheck();
-    gotosleep();
+
 }
 
 void doBatChart() {
@@ -769,8 +760,7 @@ void doBatChart() {
     } while (display.nextPage());
 
     display.setFullWindow();
-    batCheck();
-    gotosleep();
+
 }
 
 
@@ -885,12 +875,14 @@ void updateMain(){
 }
 
 void setup(){
-  
-        barx = mapf (vBat, 3.3, 4.05, 0, 19);
-        if (barx > 19) {barx = 19;}
+  vBat = analogReadMilliVolts(0) / 500.0;
+  batCheck();
+  barx = mapf (vBat, 3.3, 4.05, 0, 19);
+  if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
   preferences.begin("my-app", false);
-  timetosleep = preferences.getUInt("timetosleep", 5);
+    timetosleep = preferences.getUInt("timetosleep", 5);
+    wifisaved = preferences.getBool("wifisaved", false);
   preferences.end();
   Wire.begin();  
   scd4x.begin(Wire);
@@ -920,8 +912,7 @@ void setup(){
    
     abshum = (6.112 * pow(2.71828, ((17.67 * temp.temperature)/(temp.temperature + 243.5))) * humidity.relative_humidity * 2.1674)/(273.15 + temp.temperature);
 
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  delay(50);
+  //configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   pinMode(controlpin, OUTPUT);
   digitalWrite(controlpin, HIGH);
   display.init(115200, false, 10, false); // void init(uint32_t serial_diag_bitrate, bool initial, uint16_t reset_duration = 10, bool pulldown_rst_mode = false)
@@ -935,18 +926,12 @@ void setup(){
   pinMode(5, INPUT_PULLUP );
 
 
-
    
-  delay(10);
 
 
 
             
-  if (firstrun >= 100) {display.clearScreen();
-   if (page == 2){
-        wipeScreen();
-
-   }
+  if (firstrun >= 1000) {display.clearScreen();
   firstrun = 0;}
   firstrun++;
 
@@ -954,8 +939,9 @@ void setup(){
   
 
 
-  vBat = analogReadMilliVolts(0) / 500.0;
+
   if (GPIO_reason < 0) {
+
     startWifi();
     takeSamples();
       switch (page){
@@ -974,7 +960,8 @@ void setup(){
         case 4: //up
           doBatChart(); 
           break;
-      }
+      }    
+      gotosleep();  
     }
   switch (GPIO_reason) {
     case 1: 
@@ -983,24 +970,13 @@ void setup(){
       break;
     case 2: 
       page = 2;
-        wipeScreen();
-        doMainDisplay();
+      doMainDisplay();
       break;
     case 3: 
       page = 3;
       doCO2Chart();
       break;
     case 0: 
-      delay(50); // debounce
-      while (!digitalRead(0)) {
-        delay(10);
-        if (millis() > 3000) {
-          display.drawInvertedBitmap(0, 0, kirby, 250, 122, GxEPD_BLACK);
-          display.display(true);
-          gotosleep();
-          return;
-        }
-      }
       page = 4;
       doBatChart();
       break;
@@ -1010,6 +986,7 @@ void setup(){
         {
           delay(10);
           if (millis() > 2000) {
+            while (!digitalRead(5)){delay(1);}
             startWebserver();
           return;}
         }
@@ -1017,7 +994,7 @@ void setup(){
       display.setPartialWindow(0, 0, display.width(), display.height());
       startWifi();
       takeSamples();
-      display.clearScreen();
+      //display.clearScreen();
       switch (page){
         case 0: 
           doTempChart();
@@ -1036,7 +1013,7 @@ void setup(){
           break;
       }
   }
-
+  gotosleep();  
   
 
 }
@@ -1059,16 +1036,22 @@ void loop()
                 wipeScreen();
                 display.setCursor(0, 0);                                  //
                 display.println("Use your mobile phone to connect to ");
-                display.println("[CO2 WiFi Setup] then browse to");
+                display.println("[CO2 Setup] then browse to");
                 display.println("http://192.168.4.1 to connect to WiFi");
                 display.display(true);
                 failcount = 0;
                 WiFi.mode(WIFI_STA);
+                WiFi.setTxPower (WIFI_POWER_8_5dBm);
                 wm.setConfigPortalTimeout(300);
-                if (wm.getWiFiIsSaved()) {
-                wm.startConfigPortal("CO2 WiFi Setup");
-                }
-                else {wm.autoConnect("CO2 WiFi Setup");}
+                  bool res;
+                  res = wm.autoConnect("CO2 Setup");
+                  if (res) {
+                      wifisaved = true;
+                      preferences.begin("my-app", false);
+                      preferences.putBool("wifisaved", wifisaved);
+                      preferences.end();
+                    }
+                  
                 displayMenu();
                 break; 
           }
@@ -1100,6 +1083,10 @@ void loop()
         case 6:    
             wm.resetSettings();
             wifireset = true;
+            wifisaved = false;
+            preferences.begin("my-app", false);
+            preferences.putBool("wifisaved", wifisaved);
+            preferences.end();
             break;  
         case 7: 
             ESP.restart();
@@ -1108,7 +1095,7 @@ void loop()
     }
   every (100){
 
-    if (!digitalRead(1)) {
+    if (!digitalRead(0)) {
       calibrated = false;
       facreset = false;
       wifireset = false;
@@ -1119,7 +1106,7 @@ void loop()
       if (timetosleep > 999) {timetosleep = 999;}
       displayMenu();
     }
-    if (!digitalRead(0)) {
+    if (!digitalRead(1)) {
       calibrated = false;
       facreset = false;
       wifireset = false;
