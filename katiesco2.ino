@@ -503,6 +503,7 @@ void wipeScreen(){
 
 void batCheck() {
   if (vBat < 3.4){
+    wipeScreen();
   display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
   display.setTextColor(GxEPD_WHITE, GxEPD_BLACK);
   display.setCursor(10,60);
@@ -883,10 +884,11 @@ void updateMain(){
 
 void setup(){
   vBat = analogReadMilliVolts(0) / 500.0;
-  batCheck();
+  
   barx = mapf (vBat, 3.3, 4.05, 0, 19);
   if (barx > 19) {barx = 19;}
   GPIO_reason = log(esp_sleep_get_gpio_wakeup_status())/log(2);
+  if (GPIO_reason != 0) {batCheck();}
   preferences.begin("my-app", false);
     timetosleep = preferences.getUInt("timetosleep", 5);
     wifisaved = preferences.getBool("wifisaved", false);
